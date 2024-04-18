@@ -15,10 +15,14 @@ import os
 import zipfile 
 
 default_device = 'cuda' if torch.cuda.is_available() else 'cpu'
+## gpu 있으면 gpu 쓰고 없으면 cpu를 쓰겠다는 코드
 
 # Python에서 MNIST 데이터셋을 불러와서 처리하는 과정
 # 이 함수를 실행하면, builtins 모듈을 통해 전역 변수로 설정된 data_train, data_test, train_loader, test_loader가 생성되어 어디서든 접근할 수 있게 됩니다. 이러한 설정은 함수 내에서 데이터를 처리하고, 이후에 다른 부분에서 해당 데이터를 사용할 때 유용하게 활용될 수 있음
 
+
+## 로컬데이터에없으면 어디가서 가져와라 이런뜻
+## 3가지를 바꿔야함
 def load_mnist(batch_size=64): # load_mnist라는 이름의 함수를 정의하고, 이 함수는 기본적으로 batch_size 매개변수를 64로 설정합니다. 이 매개변수는 데이터를 얼마나 많은 단위로 나눌지 결정
     builtins.data_train = torchvision.datasets.MNIST('./data',
         download=True,train=True,transform=ToTensor()) # torchvision 라이브러리의 datasets 모듈을 사용하여 MNIST 데이터셋을 불러옵니다. './data'는 데이터셋이 저장될 경로를 지정하며, download=True는 해당 경로에 데이터가 없을 경우 인터넷에서 자동으로 다운로드하도록 설정합니다. train=True는 학습용 데이터셋을 불러오는 것을 의미하고, transform=ToTensor()는 데이터셋의 이미지들을 파이토치 텐서로 변환하는 함수를 적용
@@ -30,13 +34,20 @@ def load_mnist(batch_size=64): # load_mnist라는 이름의 함수를 정의하�
 # 신경망을 한 에폭(epoch) 동안 학습하는 과정을 구현한 Python 함수
 # 이 함수는 모델을 학습시키고, 각 배치에서의 평균 손실과 정확도를 계산하여 반환하는데 이를 통해 학습 과정을 모니터링할 수 있음
 
+
+## lr : 러닝데이터 사용 비율
 def train_epoch(net,dataloader,lr=0.01,optimizer=None,loss_fn = nn.NLLLoss()): # 이 함수는 여러 매개변수를 받는데, net은 학습할 신경망 모델, dataloader는 데이터 로더, lr은 학습률(기본값 0.01), optimizer는 최적화 도구(기본값은 None), loss_fn은 손실 함수로 기본적으로 Negative Log Likelihood Loss를 사용
     optimizer = optimizer or torch.optim.Adam(net.parameters(),lr=lr) # 최적화 도구가 제공되지 않았다면, Adam 최적화 도구를 사용하여 신경망의 매개변수를 최적화하며, 학습률은 lr로 설정
+    ## Adam 옵티마이저
     net.train() # 모델을 학습 모드로 설정합니다. 이는 일부 신경망 계층(예: 드롭아웃 계층)이 학습과 평가 모드에서 다르게 동작하기 때문에 필요
     total_loss,acc,count = 0,0,0 # 총 손실, 정확도, 처리한 샘플 수를 초기화
     for features,labels in dataloader: # 데이터 로더로부터 특징(feature)과 레이블(label)을 반복적으로 가져옴
+        ## labels : 정답
         optimizer.zero_grad() # 최적화 도구의 모든 기울기를 0으로 초기화하는데 새로운 가중치 업데이트를 위해 필수
+
         lbls = labels.to(default_device) # 레이블을 기본 계산 장치(예: GPU)로 이동
+        ## cpu와 gpu 둘다 같은위치에 정보가 있어야 하기때문에 이동시키는 작업
+
         out = net(features.to(default_device)) # 특징을 같은 장치로 이동시킨 후, 신경망을 통해 예측을 수행
         loss = loss_fn(out,lbls) #cross_entropy(out,labels) 예측 결과와 레이블을 이용해 손실을 계산
         loss.backward() # 손실에 대한 기울기를 계산
@@ -46,6 +57,9 @@ def train_epoch(net,dataloader,lr=0.01,optimizer=None,loss_fn = nn.NLLLoss()): #
         acc+=(predicted==lbls).sum() # 정확하게 예측된 수를 누적
         count+=len(labels) # 처리된 레이블의 수를 누적
     return total_loss.item()/count, acc.item()/count # 평균 손실과 정확도를 반환
+## 트레이닝 모드와 벨리데이트 모드
+## 
+
 
 # 주어진 신경망 모델을 평가하는 과정을 나타내는 Python 함수
 # 이 함수는 주어진 데이터 로더를 사용하여 모델의 성능을 평가하고, 평균 손실과 정확도를 반환하여 모델의 효율성을 확인
@@ -80,6 +94,7 @@ def train(net,train_loader,test_loader,optimizer=None,lr=0.01,epochs=10,loss_fn=
 
 # 신경망 모델을 학습하면서 주기적으로 학습 상태를 출력하고, 각 에폭의 끝에서 검증 성능을 출력하는 Python 함수
 
+## 학습 상태 점검
 def train_long(net,train_loader,test_loader,epochs=5,lr=0.01,optimizer=None,loss_fn = nn.NLLLoss(),print_freq=10): # train_long 함수를 정의 - net: 학습할 신경망 모델; train_loader, test_loader: 각각 학습과 검증 데이터를 로드하는 데 사용되는 데이터 로더; epochs: 전체 학습을 반복할 횟수, 기본값은 5; lr: 학습률, 기본값은 0.01; optimizer: 최적화 도구, 기본적으로 None이며, 제공되지 않았을 경우 Adam 최적화 도구를 사용; loss_fn: 손실 함수, 기본값은 Negative Log Likelihood Loss); print_freq: 학습 상태를 출력할 빈도
     optimizer = optimizer or torch.optim.Adam(net.parameters(),lr=lr) # 최적화 도구가 제공되지 않은 경우, Adam 최적화 도구를 사용
     for epoch in range(epochs): # 지정된 횟수만큼 에폭을 반복
@@ -103,11 +118,17 @@ def train_long(net,train_loader,test_loader,epochs=5,lr=0.01,optimizer=None,loss
 
 # 학습 및 검증 데이터에 대한 정확도와 손실을 시각화하는 Python 함수인데 Matplotlib 라이브러리를 사용하여 결과를 그래프로 표시
 
+## 시각화 >> 당연히써야함
+## 이거말고도 다른거 주어와서 써보는것도 가능하면 해보자
 def plot_results(hist): # plot_results라는 함수를 정의하는데 hist라는 이름의 딕셔너리를 매개변수로 받는데 학습과 검증 과정의 정확도와 손실이 배열 형태로 저장되어 있음
     plt.figure(figsize=(15,5)) # 새로운 그래프 창을 만들고, 크기를 가로 15인치, 세로 5인치로 설정
     plt.subplot(121) # 두 개의 그래프를 나란히 표시하기 위해 첫 번째 위치(1행 2열의 첫 번째)에 서브플롯을 생성
     plt.plot(hist['train_acc'], label='Training acc') # hist 딕셔너리에서 학습 정확도(train_acc)를 추출하여 그래프로 그리는데 라벨을 'Training acc'로 지정하여 그래프에 범례를 추가
+    # plt.plot(hist['val_acc'], label='Validation acc') # hist 딕셔너리에서 검증 정확도(val_acc)를 추출하여 그래프로 그리는데 라벨을 'Validation acc'로 지정
     plt.plot(hist['val_acc'], label='Validation acc') # hist 딕셔너리에서 검증 정확도(val_acc)를 추출하여 그래프로 그리는데 라벨을 'Validation acc'로 지정
+    ###### 벨리데이션 데이터 없음 >>> 수정?
+    ## 사실 벨리데이션 데이터였는데 우리는 그걸 테스트데이터로 보고있었다고?
+
     plt.legend() # 그래프에 범례를 추가하는데 각 데이터 세트를 구분하기 위해 사용
     plt.subplot(122) # 두 번째 위치(1행 2열의 두 번째)에 또 다른 서브플롯을 생성
     plt.plot(hist['train_loss'], label='Training loss') # hist 딕셔너리에서 학습 손실(train_loss)을 추출하여 그래프로 그린는데 라벨을 'Training loss'로 지정
@@ -116,6 +137,7 @@ def plot_results(hist): # plot_results라는 함수를 정의하는데 hist라�
 
 # 컨볼루션(Convolution) 연산을 시각화하는 함수 plot_convolution을 정의하는데 특정 커널을 사용하여 이미지에 적용한 결과를 보여줌 
 
+##
 def plot_convolution(t,title=''): # 함수를 정의하고, 두 개의 매개변수를 받는데 t: 컨볼루션 연산에 사용될 커널의 텐서이고 title: 그래프의 상단에 표시될 제목인데 기본값은 빈 문자열
     with torch.no_grad(): # 이 블록 내에서는 PyTorch의 자동 미분 기능을 비활성화하여, 연산에 대한 기울기 계산을 수행하지 않는데 메모리 사용을 줄이고 연산 속도를 향상
         c = nn.Conv2d(kernel_size=(3,3),out_channels=1,in_channels=1) # 3x3 크기의 커널을 사용하는 2D 컨볼루션 레이어를 생성하는데 입력 채널과 출력 채널이 모두 1
@@ -148,6 +170,7 @@ def display_dataset(dataset, n=10,classes=None): # display_dataset 함수를 정
 
 # 주어진 파일 이름(fn)에 해당하는 이미지 파일을 검사하여 파일이 유효한 이미지인지 확인하는 Python 함수 check_image를 정의
 
+## 이건 안쓸듯?
 def check_image(fn): # check_image라는 이름의 함수를 정의하며, 매개변수로 파일 이름 fn을 받음
     try: # 예외 처리를 시작하는 블록인데 안에서 이미지 파일을 열고 검증을 시도
         im = Image.open(fn) # Image.open(fn)을 사용하여 파일 fn을 열고, im 객체에 할당하는데 여기서 Image는 파이썬의 PIL(Pillow) 라이브러리에서 제공하는 모듈이고 이 함수는 이미지 파일을 불러오는 데 사용
@@ -167,6 +190,7 @@ def check_image_dir(path): # check_image_dir라는 이름의 함수를 정의하
 # PyTorch의 torchvision 라이브러리를 사용하여 이미지 변환을 위한 일반적인 변환 조합을 설정하는 함수 common_transform을 정의
 # 전이 학습(Transfer Learning)이나 컴퓨터 비전 모델에서 이미지를 전처리할 때 매우 유용한데 이 변환을 사용하면 학습 데이터와 테스트 데이터를 모델이 기대하는 형식으로 일관되게 처리할 수 있음
 
+## 이미지 크기 변경 / 그냥 불러서 쓰며됨
 def common_transform(): # common_transform이라는 이름의 함수를 정의하는데 이 함수는 매개변수를 받지 않고, 구성된 이미지 변환 파이프라인을 반환
     std_normalize = torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406],
                           std=[0.229, 0.224, 0.225]) # torchvision.transforms.Normalize 함수를 사용하여 이미지의 각 채널에 대한 정규화를 설정하는데 이 변환은 주어진 평균(mean)과 표준편차(std)를 사용하여 각 채널의 픽셀 값을 정규화하는데 이 값들은 일반적으로 ImageNet 데이터셋을 기준으로 한 통계값
@@ -179,6 +203,7 @@ def common_transform(): # common_transform이라는 이름의 함수를 정의�
 
 # 개와 고양이의 이미지 데이터셋을 불러오고, 처리하여 학습 및 테스트 데이터셋으로 분할하는 Python 함수 load_cats_dogs_dataset를 정의하는데 함수는 데이터셋을 압축 해제하고, 이미지를 검사하며, 데이터를 분할하고, 로더를 설정하는 여러 단계로 구성
 
+### 이건 전혀 상관없는 코드들
 def load_cats_dogs_dataset(): # load_cats_dogs_dataset라는 이름의 함수를 정의합니다. 이 함수는 매개변수를 받지 않음
     if not os.path.exists('data/PetImages'): # 지정된 경로에 'PetImages' 폴더가 존재하는지 확인합니다. 폴더가 없으면 다음 단계로 이동
         with zipfile.ZipFile('data/kagglecatsanddogs_5340.zip', 'r') as zip_ref: # 'kagglecatsanddogs_5340.zip'라는 이름의 압축 파일을 읽기 모드로 열고 zip_ref 객체로 참조
